@@ -91,3 +91,86 @@ HTTP 請求有連線／讀取 timeout、暫時性失敗重試及預設 1.5 秒�
 ## 隱私
 
 儲存庫只包含程式、相依套件清單、文件及通用範例。個人追蹤清單、憑證、原始回應、資料庫和執行紀錄均應保留於本機。提交前請檢查 `git diff --cached`；`.gitignore` 無法自動移除已追蹤的檔案。
+
+## RAW-ONLY capture v1 (opt-in, separate from legacy fetch)
+
+`fubon_raw_capture.py` exports one new acquisition occurrence beneath an explicit,
+existing provider-owned `--export-root`. It never reads/copies old raw files or
+SQLite, invokes the legacy parsers, or writes normalized rows. Existing fetch,
+watchlist, probe and roster paths remain legacy and are **not admissible** as
+capture-v1 evidence.
+
+The standalone CLI requires `--kind roster|detail`, `--provider-version` and
+`--git-commit` (40 lowercase hex characters). Detail requests require
+`--parameters` JSON with exact string keys `a`, `BHID`, `b`, `C`, `D`, `E`, `ver`;
+`C` is `"1"`, `ver` is `"V3"`, and `D`/`E` are ISO requested date bounds.
+Supply `BHID` explicitly: no identity/parent/market relationship is inferred.
+Roster parameters are `{}`. `--max-body-bytes` is positive, default 20 MiB.
+No live acquisition, scheduling, source-term clearance or redistribution is
+established by this software. Obtain applicable source permission and scoped
+operational authorization before invoking network acquisition.
+
+Python API: `capture(Path(root), kind, parameters, provider_version=...,
+git_commit=..., max_body_bytes=...) -> PublicationResult`. The result holds the
+unchanged `manifest`, `publication_state` and `durability_status`. Offline tests may inject a transport,
+UTC clock and UUID factory. A dedicated requests session disables environment
+credentials, automatic retries and redirects and streams decoded entity bytes
+under the cap. It preserves bytes without text/numeric parsing. HTTP 200, empty
+bodies and HTTP errors establish no financial success or completeness.
+
+Each UUID4 directory contains exact `body.bin` bytes and canonical UTF-8
+`manifest.json` (sorted keys, compact separators, Unicode retained, finite JSON,
+one final LF). Schema is `fubon-raw-capture-v1`, source `fubon_ebrokerdj_raw`.
+Manifest fields are capture/provider identity, exact prepared request/parameters,
+per-attempt UTC times, status/content-type/body size/SHA-256, nullable sanitized
+transport error, NULL official availability and explicit blocked semantic gates.
+Transport errors publish a negative envelope without a body or response time;
+body-read/decompression/limit and prepublication storage failures publish no
+final UUID capture; abandoned private staging remains inadmissible.
+Body creation precedes manifest creation in private `.pending-<UUID>` staging,
+both exclusive/no-follow. Files are flushed/fsynced/closed, then staging and
+root are fsynced. One Linux `renameat2(RENAME_NOREPLACE)` publishes the complete
+directory without replacement; root is then fsynced again. No rename fallback
+is supported. Collisions fail without changing existing paths. Private staging
+and incomplete artifacts remain untouched and must be rejected by readers. Published captures must never be modified,
+moved or cleaned up. Repeating a request creates another occurrence, even when
+body bytes match. Provider timestamps are observations, never public release
+or consumer first-observation timestamps. Financial normalization, units,
+identity, coverage, terms, durable consumer receipts and strict historical PIT
+remain blocked pending separate decisions.
+
+Offline verification: `python3 -m unittest discover -s tests -v`. No new test
+framework dependency is required. The implementation requires POSIX fd-relative
+exclusive/no-follow file operations.
+
+
+RAW filesystem/publication prerequisites (FUBON-RAW-FS-1): only protected local
+Linux filesystems with directory fsync and renameat2 no-replace support are
+supported. No NFS/FUSE/remote/uncertain filesystem semantics. The operator must
+provision a dedicated trusted writer UID, externally enforce one writer process,
+provide read-only trusted consumers, and protect root and all relevant ancestors
+against rename/replacement/mount changes. No concurrent rotation or cleanup.
+The root must be owned by effective UID with no group/other write bits; the
+provider rejects violations without changing permissions. ACL/ancestor and
+writer exclusivity protection remain operator duties, not claims established by
+these checks or tests. New staging directories are private 0700. Deliberately
+broader read access must be provisioned before publication without write access.
+Hostile same-UID/root/capability actors, injected callbacks, compromised kernels
+and storage are excluded. Boundary identity checks detect the tested deterministic
+moves before the next write, but cannot close arbitrary hostile check/write races.
+No deployment isolation is attested by offline tests.
+
+Operational dispositions do not change capture-v1 manifest/reader admission:
+prepublication rejection raises sanitized CaptureError and CLI exits 1; there
+is no new final UUID export. Published/synced returns the typed result and CLI
+exits 0 with capture_id, outcome, publication_state and durability_status.
+Postpublication root-fsync/descriptor-close failure returns published/unknown,
+CLI exit 2 with capture_id and states; the intact immutable export can validate.
+A publication exception is reconciled read-only against the pinned staging inode.
+Unresolvable publication returns unknown/unknown, CLI exit 2, and blocks further
+captures in that process. No rollback, cleanup, overwrite or receipt is attempted.
+A wrapper error after real rename must not be called rejection. Absence of an
+acknowledgement never proves absence of an export. Surviving final files still
+require independent read-only schema/body/hash validation; validation does not
+establish crash survival, delivery, official time or financial/PIT eligibility.
+Synced means the specified syscalls completed, not physical crash certification.
