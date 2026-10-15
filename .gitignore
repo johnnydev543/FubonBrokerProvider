@@ -1,0 +1,31 @@
+# Local research state and generated source-site data
+/watchlist.csv
+/provider_data/
+/output/
+/raw/
+/research/output/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log
+
+# Credentials and local settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.aws/
+.ssh/
+.idea/
+.vscode/
+
+# Python and operating-system files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+._*
